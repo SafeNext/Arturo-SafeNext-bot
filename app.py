@@ -4,7 +4,7 @@ from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.llms import HuggingFaceHub  # <--- CORRETTO PER EVITARE ERRORI
+from langchain_community.llms import HuggingFaceHub
 from langchain.chains import RetrievalQA
 
 # --- Configurazione della Pagina ---
@@ -16,7 +16,7 @@ try:
     hf_token = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
     os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token
 except:
-    st.warning("Manca il token Hugging Face nei Secrets!")
+    st.error("⚠️ Errore: Manca il token Hugging Face nei Secrets di Streamlit!")
     st.stop()
 
 # --- Configurazione Percorsi e URL ---
@@ -75,4 +75,41 @@ try:
     db = setup_knowledge_base()
     llm = get_llm()
     
-    # Crea la
+    # Crea la catena di risposta
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=db.as_retriever(search_kwargs={"k": 3}),
+        return_source_documents=True
+    )
+
+    # --- Interfaccia Chat ---
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Mostra cronologia
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Input utente
+    if prompt := st.chat_input("Chiedi informazioni sui servizi Unipol..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Consulto i documenti Unipol..."):
+                # Invoca la catena
+                res = qa_chain.invoke({"query": prompt})
+                response = res["result"]
+                
+                # Pulizia della risposta (rimuove prefissi comuni dei modelli open source)
+                if "Helpful Answer:" in response:
+                    response = response.split("Helpful Answer:")[-1]
+                
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+
+except Exception as e:
+    st.error(f"Si è verificato un errore imprevisto: {e}")
