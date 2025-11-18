@@ -1,7 +1,7 @@
 streamlit
 langchain==0.1.0
 langchain-community==0.0.20
-huggingface_hub
+huggingface_hub<0.24.0
 sentence-transformers
 faiss-cpu
 beautifulsoup4
